@@ -93,20 +93,46 @@ scrape_configs:
       instance: Azure
 ```
 
-### 3. 在 Jupyter Notebook 中查询指标数据
+### 3. 在 Jupyter Notebook 中查询指标数据，集成 Scikit-learn 模型， 通过 KMeans 模型检测 CPU 使用率的异常。
 ```python
 import requests
 import pandas as pd
+from sklearn.cluster import KMeans
+import time
 
 PROMETHEUS_URL = 'http://<你的Prometheus服务器>:9090/api/v1/query'
-query = '100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
 
-response = requests.get(PROMETHEUS_URL, params={'query': query})
-data = response.json()['data']['result']
+# 获取 CPU 使用率数据，使用 fetch_cpu_usage() 函数获取 Prometheus 的实时 CPU 数据。
+def fetch_cpu_usage():
+    query = '100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+    response = requests.get(PROMETHEUS_URL, params={'query': query})
+    data = response.json()['data']['result']
+    metrics = [{'instance': item['metric']['instance'], 'value': float(item['value'][1])} for item in data]
+    return metrics
 
-metrics = [{'instance': item['metric']['instance'], 'value': float(item['value'][1])} for item in data]
-df = pd.DataFrame(metrics)
-print(df)
+# 使用 K-means 进行异常检测，detect_anomalies() 函数进行异常检测，并返回异常的主机实例。
+def detect_anomalies(data):
+    df = pd.DataFrame(data)
+    model = KMeans(n_clusters=2)  # 设置两类，正常和异常
+    df['anomaly'] = model.fit_predict(df[['value']])
+    
+    # 返回异常实例
+    anomalies = df[df['anomaly'] == 1]
+    return anomalies
+
+# 主程序
+while True:
+    cpu_metrics = fetch_cpu_usage()  # 获取 CPU 数据
+    anomalies = detect_anomalies(cpu_metrics)  # 进行异常检测
+
+    # 如果有异常则发送告警
+    if not anomalies.empty:
+        send_alert(anomalies)
+        print("告警已发送到 Slack。")
+    else:
+        print("系统正常。")
+    
+    time.sleep(300)  # 每 5 分钟运行一次
 ```
 
 ### 4. 在 Jupyter Notebook 中可视化指标数据
@@ -154,34 +180,48 @@ else:
 ```python
 import requests
 import pandas as pd
+from sklearn.cluster import KMeans
 import time
 
 PROMETHEUS_URL = 'http://<你的Prometheus服务器>:9090/api/v1/query'
 SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/your/slack/webhook'
-threshold = 80.0  # 告警阈值
 
+# 获取 CPU 使用率数据
 def fetch_cpu_usage():
     query = '100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
     response = requests.get(PROMETHEUS_URL, params={'query': query})
     data = response.json()['data']['result']
-    return [{'instance': item['metric']['instance'], 'value': float(item['value'][1])} for item in data]
+    metrics = [{'instance': item['metric']['instance'], 'value': float(item['value'][1])} for item in data]
+    return metrics
 
+# 使用 K-means 进行异常检测
+def detect_anomalies(data):
+    df = pd.DataFrame(data)
+    model = KMeans(n_clusters=2)  # 设置两类，正常和异常
+    df['anomaly'] = model.fit_predict(df[['value']])
+    
+    # 返回异常实例
+    anomalies = df[df['anomaly'] == 1]
+    return anomalies
+
+# 发送 Slack 告警
 def send_alert(anomalies):
-    message = f"⚠️ 警告！以下实例 CPU 使用率过高：
-{pd.DataFrame(anomalies).to_string(index=False)}"
+    message = f"⚠️ 警告！以下实例 CPU 使用率异常：\n{anomalies.to_string(index=False)}"
     requests.post(SLACK_WEBHOOK_URL, json={'text': message})
 
+# 主程序
 while True:
-    metrics = fetch_cpu_usage()
-    anomalies = [m for m in metrics if m['value'] > threshold]
+    cpu_metrics = fetch_cpu_usage()  # 获取 CPU 数据
+    anomalies = detect_anomalies(cpu_metrics)  # 进行异常检测
 
-    if anomalies:
+    # 如果有异常则发送告警
+    if not anomalies.empty:
         send_alert(anomalies)
         print("告警已发送到 Slack。")
     else:
         print("系统正常。")
-
-    time.sleep(300)  # 每 5 分钟检查一次
+    
+    time.sleep(300)  # 每 5 分钟运行一次
 ```
 
 ---
