@@ -1,7 +1,7 @@
 
 # 基于 Jupyter、Prometheus 和 Slack 的智能 IT 运维系统
 
-本仓库展示如何在 RHEL 服务器上使用开源工具构建**智能 IT 运维系统**。该系统从云主机（阿里云、腾讯云、Azure）收集指标数据，分析数据以检测异常，并在 CPU 使用率超过阈值时通过 Slack 自动发送告警。
+本项目展示如何在服务器上使用开源工具构建**智能 IT 运维系统**。该系统从云主机（阿里云、腾讯云、Azure）收集指标数据，分析数据以检测异常，并在 CPU 使用率超过阈值时通过 Slack 自动发送告警。
 
 ---
 
@@ -13,9 +13,16 @@
 
 ---
 
+## 文件结构
+```bash
+├── cpu_monitor.py  # CPU 监控脚本
+├── monitor.log     # 日志文件
+```
+
+---
 ## 组件
 
-- **RHEL 服务器**：承载所有服务的核心平台。
+- **Linux 服务器**：承载所有服务的核心平台。
 - **Prometheus**：从云主机收集指标数据。
 - **Jupyter Notebook**：分析指标并检测异常。
 - **Slack**：发送检测到的异常告警。
@@ -87,20 +94,80 @@ else:
 
 ---
 
-## 架构图
+## 监控脚本
 
-系统运行流程如下：
+在项目目录下新建文件 **\`cpu_monitor.py\`**，并粘贴以下代码：
 
-1. **Prometheus** 从阿里云、腾讯云和 Azure 主机收集指标。
-2. **Jupyter Notebook** 从 Prometheus 获取指标并进行异常检测。
-3. **Slack** 在检测到 CPU 使用率超过阈值时发送告警。
+```python
+import requests
+import pandas as pd
+import time
 
-详细架构图如下：
+PROMETHEUS_URL = 'http://<你的Prometheus服务器>:9090/api/v1/query'
+SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/your/slack/webhook'
+threshold = 80.0  # 告警阈值
 
-![架构图](architecture.png)
+def fetch_cpu_usage():
+    query = '100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+    response = requests.get(PROMETHEUS_URL, params={'query': query})
+    data = response.json()['data']['result']
+    return [{'instance': item['metric']['instance'], 'value': float(item['value'][1])} for item in data]
+
+def send_alert(anomalies):
+    message = f"⚠️ 警告！以下实例 CPU 使用率过高：
+{pd.DataFrame(anomalies).to_string(index=False)}"
+    requests.post(SLACK_WEBHOOK_URL, json={'text': message})
+
+while True:
+    metrics = fetch_cpu_usage()
+    anomalies = [m for m in metrics if m['value'] > threshold]
+
+    if anomalies:
+        send_alert(anomalies)
+        print("告警已发送到 Slack。")
+    else:
+        print("系统正常。")
+
+    time.sleep(300)  # 每 5 分钟检查一次
+```
+
+---
+## 运行监控程序
+
+### 1. 使用 \`nohup\` 后台运行  
+在终端中运行以下命令，确保监控程序在后台运行，并将输出保存到日志文件。
+
+```bash
+nohup python3 cpu_monitor.py > monitor.log 2>&1 &
+```
+
+- **\`nohup\`**：防止程序因会话断开而中止。  
+- **\`&\`**：让程序在后台运行。  
+- **\`monitor.log\`**：保存日志输出。
+
+### 2. 检查进程是否运行  
+```bash
+ps aux | grep cpu_monitor.py
+```
+
+### 3. 停止后台进程  
+找到进程号（PID）并终止进程：
+
+```bash
+kill <PID>
+```
 
 ---
 
+## 日志查看
+
+查看监控程序的日志输出：
+
+```bash
+tail -f monitor.log
+```
+
+---
 ## 未来改进
 
 - 集成 **Zammad** 实现基于告警的自动工单创建。
