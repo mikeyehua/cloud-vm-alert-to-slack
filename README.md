@@ -1,5 +1,5 @@
 
-# 基于 Jupyter、Prometheus 和 Slack 的智能 IT 运维系统
+# 基于AI异常检测的云主机监控与告警系统
 
 本项目展示如何在服务器上使用开源工具构建**智能 IT 运维系统**。该系统从云主机（阿里云、腾讯云、Azure）收集指标数据，分析数据以检测异常，并在 CPU 使用率超过阈值时通过 Slack 自动发送告警。
 
@@ -25,7 +25,8 @@
 
 - **Linux 服务器**：承载所有服务的核心平台。
 - **Prometheus**：从云主机收集指标数据。
-- **Jupyter Notebook**：分析指标并检测异常。
+- **Jupyter Notebook**：通过 Python 和 Scikit-learn 对收集的数据进行分析和异常检测。
+- **Scikit-learn**：用于构建 K-means 模型，进行异常检测和分析。
 - **Slack**：发送检测到的异常告警。
 - **Zammad**（可选）：可集成以管理工单。
 
@@ -93,7 +94,7 @@ scrape_configs:
       instance: Azure
 ```
 
-### 3. 在 Jupyter Notebook 中查询指标数据，集成 Scikit-learn 模型， 通过 KMeans 模型检测 CPU 使用率的异常。
+### 3. 在 Jupyter Notebook 中查询指标数据，集成 Scikit-learn 机器学习库， 通过 KMeans 模型检测 CPU 使用率的异常。
 ```python
 import requests
 import pandas as pd
