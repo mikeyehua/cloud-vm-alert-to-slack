@@ -16,7 +16,8 @@
 ## 文件结构
 ```bash
 ├── cpu_monitor.py  # CPU 监控脚本
-├── monitor.log     # 日志文件
+├── prometheus.yml  # Prometheus的配置文件
+├── Grafana_Dashboard_Updated_CPU_Only.json  #Grafana Dashboard 的CPU指标数据仪表盘
 ```
 
 ---
@@ -48,6 +49,48 @@ wget https://github.com/prometheus/prometheus/releases/download/v2.46.0/promethe
 tar -xvzf prometheus-2.46.0.linux-amd64.tar.gz
 cd prometheus-2.46.0.linux-amd64
 ./prometheus --config.file=prometheus.yml
+```
+
+将需要监控过的主机添加至Prometheus配置文件：
+```yaml
+global:
+  scrape_interval: 1m
+  scrape_timeout: 10s
+  scrape_protocols:
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText0.0.4
+  evaluation_interval: 1m
+runtime:
+  gogc: 75
+scrape_configs:
+- job_name: node exporter
+  honor_timestamps: true
+  track_timestamps_staleness: false
+  scrape_interval: 1m
+  scrape_timeout: 10s
+  scrape_protocols:
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText0.0.4
+  metrics_path: /metrics
+  scheme: http
+  enable_compression: true
+  follow_redirects: true
+  enable_http2: true
+  static_configs:
+  - targets:
+      - <tencent-cloud-instance>:9100
+    labels:
+      instance: Tencent
+  - targets:
+      - <aliyun-cloud-instance>:9100
+    labels:
+      instance: Aliyun
+  - targets:
+      - <azure-cloud-instance>:9100
+    labels:
+      instance: Azure
 ```
 
 ### 3. 在 Jupyter Notebook 中查询指标数据
@@ -91,6 +134,16 @@ if not anomalies.empty:
 else:
     print("未检测到异常。")
 ```
+### 6. 配置并部署 Grafana Dashboard
+
+仪表盘监控阿里云、腾讯云和 Azure 主机的 CPU 使用率。通过 Node Exporter 获取这些主机的实时指标数据，并在 Grafana 仪表盘中进行可视化。
+仪表盘的配置文件参考：Grafana_Dashboard_Updated_CPU_Only.json
+
+示例仪表盘 包含以下信息：
+
+	•	实例 CPU 使用率趋势图
+	•	实时监控各主机 CPU 利用率
+![Grafana_Dashboard_CPU_monitoring_CloudVM](https://github.com/user-attachments/assets/2c2ac38a-6cb6-4c48-898b-52cefe714ace)
 
 ---
 
